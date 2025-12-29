@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>EREN | Admin Upload</title>
+  <title>EREN | Admin Panel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -12,49 +12,38 @@
       background: radial-gradient(circle at top, #001f16, #0b0b0b);
       color: white;
       min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .box {
-      width: 360px;
-      background: rgba(0,0,0,0.85);
-      padding: 25px;
-      border-radius: 12px;
-      border: 1px solid rgba(0,255,156,.25);
-      box-shadow: 0 0 25px rgba(0,255,156,.15);
-      animation: fadeIn .6s ease;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(.95); }
-      to { opacity: 1; transform: scale(1); }
+      padding: 16px;
     }
 
     h1 {
-      text-align: center;
       color: #00ff9c;
-      margin-bottom: 15px;
+      text-align: center;
       letter-spacing: 2px;
+    }
+
+    .box {
+      max-width: 420px;
+      margin: auto;
+      background: rgba(0,0,0,.85);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,255,156,.25);
+      box-shadow: 0 0 20px rgba(0,255,156,.15);
     }
 
     input, textarea, button {
       width: 100%;
       padding: 10px;
-      margin: 8px 0;
+      margin: 6px 0;
       border-radius: 6px;
       border: none;
-      outline: none;
       background: #111;
       color: white;
       font-size: 14px;
+      outline: none;
     }
 
-    textarea {
-      resize: vertical;
-      min-height: 70px;
-    }
+    textarea { resize: vertical; }
 
     button {
       background: linear-gradient(45deg,#00ff9c,#00c97a);
@@ -64,20 +53,12 @@
     }
 
     button:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 15px rgba(0,255,156,.6);
+      transform: scale(1.03);
+      box-shadow: 0 0 12px rgba(0,255,156,.6);
     }
 
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    #uploadStatus {
-      font-size: 13px;
-      margin-top: 6px;
-      opacity: .85;
-      display: none;
+    button.danger {
+      background: #aa1f1f;
     }
 
     img.preview {
@@ -89,62 +70,117 @@
       display: none;
       border: 1px solid rgba(0,255,156,.3);
     }
+
+    .project-list {
+      margin-top: 30px;
+    }
+
+    .project-item {
+      border: 1px solid rgba(0,255,156,.2);
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 12px;
+      background: #111;
+    }
+
+    .project-item h3 {
+      color: #00ff9c;
+      margin: 0 0 6px;
+    }
+
+    .project-item button {
+      margin-top: 6px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 500;
+      padding: 16px;
+    }
+
+    .modal-box {
+      background: #111;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 420px;
+      width: 100%;
+      border: 1px solid rgba(0,255,156,.3);
+    }
   </style>
 </head>
 
 <body>
 
+<h1>EREN ADMIN</h1>
+
 <div class="box">
-  <h1>ADMIN</h1>
+  <h3>Upload New Project</h3>
 
   <input id="title" placeholder="Project title">
   <textarea id="description" placeholder="Project description"></textarea>
-
-  <input id="tutorial" placeholder="Tutorial link (YouTube)">
-  <input id="project" placeholder="Project link">
+  <input id="tutorial" placeholder="Tutorial link">
+  <input id="projectLink" placeholder="Project link">
 
   <input type="file" id="image" accept="image/*">
   <img id="preview" class="preview">
 
-  <div id="uploadStatus"></div>
-
   <button id="uploadBtn">Upload Project</button>
+</div>
+
+<div class="box project-list">
+  <h3>Existing Projects</h3>
+  <div id="projects"></div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal" id="editModal">
+  <div class="modal-box">
+    <h3>Edit Project</h3>
+    <input id="editTitle">
+    <textarea id="editDescription"></textarea>
+    <input id="editTutorial">
+    <input id="editProjectLink">
+
+    <button onclick="saveEdit()">Save</button>
+    <button class="danger" onclick="closeEdit()">Cancel</button>
+  </div>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
-  import { 
-    getFirestore, 
-    collection, 
-    addDoc, 
-    serverTimestamp 
+  import {
+    getFirestore, collection, addDoc, getDocs, doc,
+    updateDoc, deleteDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
-  /* ================= CONFIG ================= */
   const firebaseConfig = {
     apiKey: "AIzaSyAXZQi1Wdwf7oHRVapWNGgcCYtd4Dy5kQk",
     authDomain: "eren-c4b30.firebaseapp.com",
     projectId: "eren-c4b30"
   };
 
-  const ADMIN_UID = "pBMj3WNqc4WmStAlNHQwh4REHlm2"; // 🔥 IMPORTANT
+  const ADMIN_UID = "pBMj3WNqc4WmStAlNHQwh4REHlm2";
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  /* ================= DOM ================= */
   const titleInput = document.getElementById("title");
   const descInput = document.getElementById("description");
   const tutorialInput = document.getElementById("tutorial");
-  const projectInput = document.getElementById("project");
+  const projectInput = document.getElementById("projectLink");
   const imageInput = document.getElementById("image");
   const previewImg = document.getElementById("preview");
-  const uploadBtn = document.getElementById("uploadBtn");
-  const uploadStatus = document.getElementById("uploadStatus");
+  const projectsEl = document.getElementById("projects");
 
-  /* ================= IMAGE PREVIEW ================= */
+  let editingId = null;
+
   imageInput.onchange = () => {
     const file = imageInput.files[0];
     if (!file) return;
@@ -152,18 +188,15 @@
     previewImg.style.display = "block";
   };
 
-  /* ================= AUTH CHECK ================= */
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, user => {
     if (!user || user.uid !== ADMIN_UID) {
       window.location.href = "home.html";
+    } else {
+      loadProjects();
     }
   });
 
-  /* ================= ImgBB UPLOAD ================= */
   async function uploadToImgBB(file) {
-    uploadStatus.style.display = "block";
-    uploadStatus.textContent = "⏳ Uploading image...";
-
     const form = new FormData();
     form.append("image", file);
 
@@ -173,51 +206,81 @@
     );
 
     const data = await res.json();
-
-    if (!data || !data.data || !data.data.url) {
-      uploadStatus.textContent = "❌ Image upload failed";
-      throw new Error("ImgBB upload failed");
-    }
-
-    uploadStatus.textContent = "✔ Image uploaded";
+    if (!data?.data?.url) throw new Error("Image upload failed");
     return data.data.url;
   }
 
-  /* ================= UPLOAD PROJECT ================= */
-  uploadBtn.onclick = async () => {
-    const title = titleInput.value.trim();
-    const description = descInput.value.trim();
-    const tutorialLink = tutorialInput.value.trim();
-    const projectLink = projectInput.value.trim();
+  document.getElementById("uploadBtn").onclick = async () => {
     const file = imageInput.files[0];
-
-    if (!title || !description || !tutorialLink || !projectLink || !file) {
+    if (!titleInput.value || !descInput.value || !tutorialInput.value || !projectInput.value || !file) {
       alert("Fill all fields");
       return;
     }
 
-    try {
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = "Uploading...";
+    const imageURL = await uploadToImgBB(file);
 
-      const imageURL = await uploadToImgBB(file);
+    await addDoc(collection(db, "projects"), {
+      title: titleInput.value.trim(),
+      description: descInput.value.trim(),
+      tutorialLink: tutorialInput.value.trim(),
+      projectLink: projectInput.value.trim(),
+      image: imageURL,
+      likes: 0,
+      likedBy: {},
+      createdAt: serverTimestamp()
+    });
 
-      await addDoc(collection(db, "projects"), {
-        title,
-        description,
-        tutorialLink,
-        projectLink,
-        image: imageURL,
-        createdAt: serverTimestamp()
-      });
+    location.reload();
+  };
 
-      alert("✔ Project uploaded");
-      window.location.reload();
-    } catch (err) {
-      alert(err.message);
-      uploadBtn.disabled = false;
-      uploadBtn.textContent = "Upload Project";
-    }
+  async function loadProjects() {
+    const snap = await getDocs(collection(db, "projects"));
+    projectsEl.innerHTML = "";
+
+    snap.forEach(d => {
+      const p = d.data();
+      projectsEl.innerHTML += `
+        <div class="project-item">
+          <h3>${p.title}</h3>
+          <button onclick="openEdit('${d.id}','${p.title}','${p.description}','${p.tutorialLink}','${p.projectLink}')">
+            ✏️ Edit
+          </button>
+          <button class="danger" onclick="deleteProject('${d.id}')">
+            🗑 Delete
+          </button>
+        </div>
+      `;
+    });
+  }
+
+  window.openEdit = (id, t, d, tut, link) => {
+    editingId = id;
+    editTitle.value = t;
+    editDescription.value = d;
+    editTutorial.value = tut;
+    editProjectLink.value = link;
+    document.getElementById("editModal").style.display = "flex";
+  };
+
+  window.closeEdit = () => {
+    document.getElementById("editModal").style.display = "none";
+  };
+
+  window.saveEdit = async () => {
+    await updateDoc(doc(db, "projects", editingId), {
+      title: editTitle.value,
+      description: editDescription.value,
+      tutorialLink: editTutorial.value,
+      projectLink: editProjectLink.value
+    });
+    closeEdit();
+    loadProjects();
+  };
+
+  window.deleteProject = async (id) => {
+    if (!confirm("Delete this project permanently?")) return;
+    await deleteDoc(doc(db, "projects", id));
+    loadProjects();
   };
 </script>
 
